@@ -125,10 +125,20 @@
   table.read-wish{width:100%;border-collapse:collapse;margin-top:4px}
   table.read-wish th,table.read-wish td{border:1px solid var(--line);padding:5px 8px;font-size:13px;text-align:left}
   table.read-wish th{background:#f7fafd;color:var(--sub);font-size:11px}
-  .moshi-entry{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:#fcfdfe}
-  .moshi-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:14px}
+  .moshi-entry{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fcfdfe}
+  .moshi-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:14px}
   .moshi-entry table.read-wish{margin-top:2px}
-  .moshi-entry table.read-wish td{padding:3px 6px;font-size:12px}
+  .moshi-entry table.read-wish td{padding:4px 8px;font-size:12px}
+  .jbadge{display:inline-block;min-width:24px;text-align:center;color:#fff;font-weight:700;border-radius:5px;padding:1px 6px;font-size:12px}
+  .moshi-total{display:flex;align-items:baseline;gap:14px;background:var(--tea-soft);border-radius:8px;padding:8px 14px;margin-bottom:8px;flex-wrap:wrap}
+  .moshi-total .lbl{font-size:12px;color:var(--sub);font-weight:700}
+  .moshi-total .big{font-size:24px;font-weight:800;color:var(--ink)}
+  .moshi-total .big .u{font-size:13px;font-weight:600;margin-left:1px}
+  .moshi-total .dv{font-size:13px;color:var(--sub)}
+  .moshi-key{font-size:12px;color:var(--sub);font-weight:700;margin:8px 0 2px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .moshi-detail{margin-top:6px}
+  .moshi-detail summary{cursor:pointer;font-size:12px;color:var(--accent);font-weight:600;padding:2px 0}
   /* modal */
   .overlay{position:fixed;inset:0;background:rgba(20,35,55,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:20px}
   .modal{background:#fff;border-radius:14px;padding:22px 24px;width:min(560px,100%);box-shadow:0 12px 40px rgba(0,0,0,.25)}
@@ -909,19 +919,44 @@ function importMoshiCSV(text, defaultName){
   persistState(); render();
   alert(`「${moshiName}」の模試結果を ${applied}名 に取り込みました${created?`（うち${created}名は新規追加）`:''}。`);
 }
-// 模試結果の表示HTML（教員ページ用・科目別＋志望校判定）
+// 判定（A〜E / GTZのA1等）を色分けバッジに
+function judgeBadge(v){
+  v=(v||'').trim(); if(!v) return '<span class="muted">—</span>';
+  const c={A:'#1f8a55',B:'#2563a8',C:'#c2410c',D:'#b3261e',E:'#7a1f1a'}[v.charAt(0)]||'#94a3b3';
+  return `<span class="jbadge" style="background:${c}">${esc(v)}</span>`;
+}
+const MOSHI_TOP=new Set(['国語','数学計','英語計','地歴・公民計','公民計','理科計','理科基礎計','情報計','数学①②']);
+const isMainSubject=l=> MOSHI_TOP.has(l) || l.indexOf('英語・')===0;
+function subjRows(arr){
+  return arr.map(x=>`<tr><td>${esc(x.label)}</td><td class="num">${esc(x.score)}</td><td class="num">${esc(x.hensa)}</td><td>${judgeBadge(x.gtz)}</td></tr>`).join('');
+}
+// 模試結果の表示HTML（総合を大きく・主要教科＋折りたたみ・判定色分け）
 function moshiCardHTML(s, editable){
   if(!s.moshiList||!s.moshiList.length) return `<div class="hint">まだ模試結果がありません。左下の「📈 模試CSVを取込」から取り込めます。</div>`;
-  return s.moshiList.map((m,mi)=>`
-    <div class="moshi-entry">
+  return s.moshiList.map((m,mi)=>{
+    const subs=m.subjects||[];
+    const total=subs[0];
+    const rest=subs.slice(1);
+    const main=rest.filter(x=>isMainSubject(x.label));
+    const detail=rest.filter(x=>!isMainSubject(x.label));
+    const totalBox = total ? `<div class="moshi-total">
+        <span class="lbl">${esc(total.label)}（総合）</span>
+        <span class="big">${esc(total.score)}<span class="u">点</span></span>
+        <span class="dv">偏差値 <b>${esc(total.hensa)}</b></span>
+        ${judgeBadge(total.gtz)}
+      </div>` : '';
+    const mainTable = main.length ? `<table class="read-wish"><thead><tr><th>主要教科</th><th style="width:64px">得点</th><th style="width:64px">偏差値</th><th style="width:54px">GTZ</th></tr></thead><tbody>${subjRows(main)}</tbody></table>` : '';
+    const detailBlock = detail.length ? `<details class="moshi-detail"><summary>＋ その他の科目（内訳）を表示（${detail.length}）</summary>
+        <table class="read-wish"><tbody>${subjRows(detail)}</tbody></table></details>` : '';
+    const judgeTable = m.judges&&m.judges.length ? `<div class="moshi-key">🎯 志望校判定</div>
+      <table class="read-wish"><thead><tr><th>大学</th><th>学部・学科</th><th style="width:60px">日程</th><th style="width:50px">共テ</th><th style="width:60px">2次/一般</th></tr></thead>
+      <tbody>${m.judges.map(j=>`<tr><td>${esc(j.univ)}</td><td>${esc(j.fac)}${j.dept?' '+esc(j.dept):''}</td><td>${esc(j.sched)}</td><td style="text-align:center">${judgeBadge(j.kyote)}</td><td style="text-align:center">${judgeBadge(j.niji)}</td></tr>`).join('')}</tbody></table>` : '';
+    return `<div class="moshi-entry">
       <div class="moshi-head"><b>📈 ${esc(m.name)}</b>${m.date?` <span class="kana">${esc(m.date)}</span>`:''}
         <span style="flex:1"></span>${editable?`<button class="icon-btn no-print" data-delmoshi="${mi}" title="削除">✕</button>`:''}</div>
-      <table class="read-wish"><thead><tr><th>科目</th><th>得点</th><th>偏差値</th><th>GTZ</th></tr></thead>
-        <tbody>${m.subjects.map(x=>`<tr><td>${esc(x.label)}</td><td style="text-align:right">${esc(x.score)}</td><td style="text-align:right">${esc(x.hensa)}</td><td>${esc(x.gtz)}</td></tr>`).join('')}</tbody></table>
-      ${m.judges.length?`<div class="k" style="margin:8px 0 2px">志望校判定</div>
-      <table class="read-wish"><thead><tr><th>大学</th><th>学部</th><th>学科</th><th>日程</th><th>共テ</th><th>2次/一般</th></tr></thead>
-        <tbody>${m.judges.map(j=>`<tr><td>${esc(j.univ)}</td><td>${esc(j.fac)}</td><td>${esc(j.dept)}</td><td>${esc(j.sched)}</td><td style="text-align:center;font-weight:700">${esc(j.kyote)}</td><td style="text-align:center;font-weight:700">${esc(j.niji)}</td></tr>`).join('')}</tbody></table>`:''}
-    </div>`).join('');
+      ${totalBox}${mainTable}${detailBlock}${judgeTable}
+    </div>`;
+  }).join('');
 }
 
 /* ============ mode switch & boot ============ */
