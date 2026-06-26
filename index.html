@@ -137,11 +137,12 @@
   .moshi-total .dv{font-size:13px;color:var(--sub)}
   .moshi-key{font-size:12px;color:var(--sub);font-weight:700;margin:8px 0 4px}
   td.num{text-align:right;font-variant-numeric:tabular-nums}
-  .subj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px}
+  .subj-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  @media(max-width:620px){.subj-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   .subj-item{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:7px;padding:5px 10px;background:#fff}
-  .subj-item .sn{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .subj-item .sv{font-weight:700;font-size:14px;font-variant-numeric:tabular-nums}
-  .subj-item .sh{font-size:11px;color:var(--sub);font-variant-numeric:tabular-nums}
+  .subj-item .sn{flex:1;font-size:13px;line-height:1.3}
+  .subj-item .sv{font-weight:700;font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .subj-item .sh{font-size:11px;color:var(--sub);font-variant-numeric:tabular-nums;white-space:nowrap}
   .moshi-detail{margin-top:6px}
   .moshi-detail summary{cursor:pointer;font-size:12px;color:var(--accent);font-weight:600;padding:2px 0}
   /* modal */
@@ -932,8 +933,11 @@ function judgeBadge(v){
 }
 const MOSHI_TOP=new Set(['国語','数学計','英語計','地歴・公民計','公民計','理科計','理科基礎計','情報計','数学①②']);
 const isMainSubject=l=> MOSHI_TOP.has(l) || l.indexOf('英語・')===0;
+// 長い・読みにくい科目名を短く
+const SUBJ_SHORT={'英語・ﾘｰﾃﾞｨﾝｸﾞ':'英語R','英語・ﾘｽﾆﾝｸﾞ':'英語L','英語・リーディング':'英語R','英語・リスニング':'英語L','地歴・公民計':'地歴公民','理科基礎計':'理科基礎','歴総、日探':'歴総・日探','公共、政経':'公共・政経'};
+const shortLabel=l=>SUBJ_SHORT[l]||l;
 function subjGrid(arr){
-  return `<div class="subj-grid">${arr.map(x=>`<div class="subj-item"><span class="sn">${esc(x.label)}</span><span class="sv">${esc(x.score)}</span>${x.hensa?`<span class="sh">偏${esc(x.hensa)}</span>`:''}${judgeBadge(x.gtz)}</div>`).join('')}</div>`;
+  return `<div class="subj-grid">${arr.map(x=>`<div class="subj-item"><span class="sn">${esc(shortLabel(x.label))}</span><span class="sv">${esc(x.score)}</span>${x.hensa?`<span class="sh">偏${esc(x.hensa)}</span>`:''}${judgeBadge(x.gtz)}</div>`).join('')}</div>`;
 }
 // 模試結果の表示HTML（総合を大きく・主要教科＋折りたたみ・判定色分け）
 function moshiCardHTML(s, editable){
