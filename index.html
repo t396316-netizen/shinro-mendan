@@ -108,7 +108,8 @@
   .wish-card-head .wrank{font-weight:700;color:var(--accent);font-size:13px}
   .wish-card-head .sp{flex:1}
   .wish-grid1{display:grid;grid-template-columns:110px 1fr 1fr 150px;gap:8px}
-  .wish-grid2{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+  .wish-grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px}
+  .wf input[type=date]{min-width:0}
   .wf{display:flex;flex-direction:column;gap:2px;min-width:0}
   .wf label{font-size:11px;color:var(--sub);font-weight:600}
   .wf input,.wf select{padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-size:13px;font-family:inherit;width:100%;background:#fff}
@@ -270,7 +271,9 @@ function studentFromRoster(r){
   s.rosterId=rosterIdOf(r); s.cls=r.cls||ROSTER_CLASS; s.no=r.no; s.name=r.name; s.kana=r.kana||'';
   return s;
 }
-function blankWish(){ return {type:'',name:'',dept:'',method:'',note:'',appPeriod:'',examDate:'',resultDate:'',procDeadline:''}; }
+function blankWish(){ return {type:'',name:'',dept:'',method:'',note:'',appStart:'',appEnd:'',examDate:'',resultDate:'',procDeadline:'',appPeriod:''}; }
+// YYYY-MM-DD → M/D（カレンダー以外の旧テキストはそのまま返す）
+function fmtMD(d){ if(!d) return ''; const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(d); return m?(+m[2])+'/'+(+m[3]):d; }
 function blankLog(){ return {date:new Date().toISOString().slice(0,10),text:'',agree:''}; }
 
 /* ============ shared field builders ============ */
@@ -306,11 +309,13 @@ function bindWishEditable(obj, containerId, onChange){
           <div class="wf"><label>受験方式・選考</label><select data-i="${i}" data-f="method">${methodOpts(obj.course).map(o=>`<option ${w.method===o?'selected':''}>${o}</option>`).join('')}</select></div>
         </div>
         <div class="wish-grid2">
-          <div class="wf"><label>出願期間</label><input data-i="${i}" data-f="appPeriod" value="${esc(w.appPeriod||'')}" placeholder="例：11/1〜11/6"></div>
-          <div class="wf"><label>試験日</label><input data-i="${i}" data-f="examDate" value="${esc(w.examDate||'')}" placeholder="例：11/20"></div>
-          <div class="wf"><label>合格発表日</label><input data-i="${i}" data-f="resultDate" value="${esc(w.resultDate||'')}" placeholder="例：12/1"></div>
-          <div class="wf"><label>手続き締め切り</label><input data-i="${i}" data-f="procDeadline" value="${esc(w.procDeadline||'')}" placeholder="例：12/8"></div>
+          <div class="wf"><label>出願開始</label><input type="date" data-i="${i}" data-f="appStart" value="${esc(w.appStart||'')}"></div>
+          <div class="wf"><label>出願締切</label><input type="date" data-i="${i}" data-f="appEnd" value="${esc(w.appEnd||'')}"></div>
+          <div class="wf"><label>試験日</label><input type="date" data-i="${i}" data-f="examDate" value="${esc(w.examDate||'')}"></div>
+          <div class="wf"><label>合格発表日</label><input type="date" data-i="${i}" data-f="resultDate" value="${esc(w.resultDate||'')}"></div>
+          <div class="wf"><label>手続き締め切り</label><input type="date" data-i="${i}" data-f="procDeadline" value="${esc(w.procDeadline||'')}"></div>
         </div>
+        ${w.appPeriod&&!w.appStart&&!w.appEnd?`<div class="hint" style="margin-top:4px">旧データの出願期間：${esc(w.appPeriod)}（カレンダーで入れ直してください）</div>`:''}
         <div class="wf" style="margin-top:8px"><label>備考</label><input data-i="${i}" data-f="note" value="${esc(w.note)}" placeholder="条件・メモなど"></div>`;
       body.appendChild(card);
     });
@@ -665,11 +670,12 @@ function renderMeeting(){
   if(!s){ main.innerHTML=emptyHTML('左の一覧から、面談する生徒を選んでください。'); document.getElementById('metaInfo').textContent=`面談モード ・ 生徒 ${state.students.length} 名`; return; }
   const courseLabel=s.course||'未定';
   const wishCards=s.wishes.map((w,i)=>{
+    const appText=(w.appStart||w.appEnd)?`${fmtMD(w.appStart)}〜${fmtMD(w.appEnd)}`:(w.appPeriod||'');
     const sched=[
-      w.appPeriod?`出願<b>${esc(w.appPeriod)}</b>`:'',
-      w.examDate?`試験<b>${esc(w.examDate)}</b>`:'',
-      w.resultDate?`発表<b>${esc(w.resultDate)}</b>`:'',
-      w.procDeadline?`手続締切<b>${esc(w.procDeadline)}</b>`:''
+      appText?`出願<b>${esc(appText)}</b>`:'',
+      w.examDate?`試験<b>${esc(fmtMD(w.examDate))}</b>`:'',
+      w.resultDate?`発表<b>${esc(fmtMD(w.resultDate))}</b>`:'',
+      w.procDeadline?`手続締切<b>${esc(fmtMD(w.procDeadline))}</b>`:''
     ].filter(Boolean);
     return `<div class="wish-read">
       <div class="wr-top"><span class="wr-rank">第${i+1}</span><span class="wr-name">${disp(w.name)}</span>
