@@ -102,6 +102,26 @@
   table.wish td.del{width:40px;text-align:center}
   .icon-btn{border:none;background:none;cursor:pointer;color:var(--sub);font-size:15px;padding:2px 6px;border-radius:6px}
   .icon-btn:hover{background:#f0f0f0;color:var(--danger)}
+  /* 志望先カード（編集） */
+  .wish-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fcfdfe}
+  .wish-card-head{display:flex;align-items:center;margin-bottom:6px}
+  .wish-card-head .wrank{font-weight:700;color:var(--accent);font-size:13px}
+  .wish-card-head .sp{flex:1}
+  .wish-grid1{display:grid;grid-template-columns:110px 1fr 1fr 150px;gap:8px}
+  .wish-grid2{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+  .wf{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .wf label{font-size:11px;color:var(--sub);font-weight:600}
+  .wf input,.wf select{padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-size:13px;font-family:inherit;width:100%;background:#fff}
+  .wf input:focus,.wf select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+  @media(max-width:680px){.wish-grid1,.wish-grid2{grid-template-columns:1fr 1fr}}
+  /* 志望先（読み取り・面談ビュー） */
+  .wish-read{border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:8px;background:#fafcfe}
+  .wish-read .wr-top{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:14px}
+  .wish-read .wr-rank{font-weight:700;color:var(--accent)}
+  .wish-read .wr-name{font-weight:700}
+  .wish-read .wr-meta{color:var(--sub);font-size:12px}
+  .wish-read .wr-sched{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px;font-size:12px}
+  .wish-read .wr-sched span b{color:var(--ink);font-weight:700;margin-left:3px}
   /* interview log */
   .log{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fcfdfe}
   .log-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
@@ -250,7 +270,7 @@ function studentFromRoster(r){
   s.rosterId=rosterIdOf(r); s.cls=r.cls||ROSTER_CLASS; s.no=r.no; s.name=r.name; s.kana=r.kana||'';
   return s;
 }
-function blankWish(){ return {type:'',name:'',dept:'',method:'',note:''}; }
+function blankWish(){ return {type:'',name:'',dept:'',method:'',note:'',appPeriod:'',examDate:'',resultDate:'',procDeadline:''}; }
 function blankLog(){ return {date:new Date().toISOString().slice(0,10),text:'',agree:''}; }
 
 /* ============ shared field builders ============ */
@@ -264,25 +284,35 @@ function typeOpts(course){ return course==='就職'
 const ALONE_OPTS=['','一人暮らしも可','自宅から通える範囲のみ','要相談・未定'];
 const RONIN_OPTS=['','浪人も可','現役のみ（浪人は不可）','要相談・未定'];
 const UNIV_OPTS=['','特にしばりなし','国公立中心で考えている','学費の都合で国公立希望','私立中心で考えている'];
+const AREA_OPTS=['','自宅通学のみ','東海・関東まで','本州まで','全国どこでも可能'];
 const optionsHTML=(opts,val)=>opts.map(o=>`<option value="${esc(o)}" ${val===o?'selected':''}>${o||'― 選択 ―'}</option>`).join('');
 
-// editable wishes table into containerId; obj.wishes mutated; onChange() after edits
+// editable wishes (志望先カード) into containerId; obj.wishes mutated; onChange() after edits
 function bindWishEditable(obj, containerId, onChange){
   const body=document.getElementById(containerId);
   function draw(){
     body.innerHTML='';
     obj.wishes.forEach((w,i)=>{
-      const tr=document.createElement('tr');
       const isS=obj.course==='就職';
-      tr.innerHTML=`
-        <td class="rank">第${i+1}</td>
-        <td><select data-i="${i}" data-f="type">${typeOpts(obj.course).map(o=>`<option ${w.type===o?'selected':''}>${o}</option>`).join('')}</select></td>
-        <td><input data-i="${i}" data-f="name" value="${esc(w.name)}" placeholder="${isS?'例：◯◯株式会社':'例：◯◯大学'}"></td>
-        <td><input data-i="${i}" data-f="dept" value="${esc(w.dept)}" placeholder="${isS?'例：総合職':'例：経済学部'}"></td>
-        <td><select data-i="${i}" data-f="method">${methodOpts(obj.course).map(o=>`<option ${w.method===o?'selected':''}>${o}</option>`).join('')}</select></td>
-        <td><input data-i="${i}" data-f="note" value="${esc(w.note)}" placeholder="出願時期・条件など"></td>
-        <td class="del"><button class="icon-btn no-print" data-del="${i}" title="削除">✕</button></td>`;
-      body.appendChild(tr);
+      const card=document.createElement('div');
+      card.className='wish-card';
+      card.innerHTML=`
+        <div class="wish-card-head"><span class="wrank">第${i+1}志望</span><span class="sp"></span>
+          <button class="icon-btn no-print" data-del="${i}" title="削除">✕</button></div>
+        <div class="wish-grid1">
+          <div class="wf"><label>区分</label><select data-i="${i}" data-f="type">${typeOpts(obj.course).map(o=>`<option ${w.type===o?'selected':''}>${o}</option>`).join('')}</select></div>
+          <div class="wf"><label>${isS?'企業名':'学校名'}</label><input data-i="${i}" data-f="name" value="${esc(w.name)}" placeholder="${isS?'例：◯◯株式会社':'例：◯◯大学'}"></div>
+          <div class="wf"><label>${isS?'職種':'学部・学科'}</label><input data-i="${i}" data-f="dept" value="${esc(w.dept)}" placeholder="${isS?'例：総合職':'例：経済学部'}"></div>
+          <div class="wf"><label>受験方式・選考</label><select data-i="${i}" data-f="method">${methodOpts(obj.course).map(o=>`<option ${w.method===o?'selected':''}>${o}</option>`).join('')}</select></div>
+        </div>
+        <div class="wish-grid2">
+          <div class="wf"><label>出願期間</label><input data-i="${i}" data-f="appPeriod" value="${esc(w.appPeriod||'')}" placeholder="例：11/1〜11/6"></div>
+          <div class="wf"><label>試験日</label><input data-i="${i}" data-f="examDate" value="${esc(w.examDate||'')}" placeholder="例：11/20"></div>
+          <div class="wf"><label>合格発表日</label><input data-i="${i}" data-f="resultDate" value="${esc(w.resultDate||'')}" placeholder="例：12/1"></div>
+          <div class="wf"><label>手続き締め切り</label><input data-i="${i}" data-f="procDeadline" value="${esc(w.procDeadline||'')}" placeholder="例：12/8"></div>
+        </div>
+        <div class="wf" style="margin-top:8px"><label>備考</label><input data-i="${i}" data-f="note" value="${esc(w.note)}" placeholder="条件・メモなど"></div>`;
+      body.appendChild(card);
     });
     body.querySelectorAll('select,input').forEach(el=>el.addEventListener('input',()=>{
       obj.wishes[+el.dataset.i][el.dataset.f]=el.value; onChange();
@@ -362,20 +392,16 @@ function renderStudent(){
     </div>
 
     <div class="card stuband">
-      <h2>💭 希望・将来やりたいこと <span class="role-tag s">生徒記入</span></h2>
+      <h2>💭 進学先で学びたいことや将来の展望 <span class="role-tag s">生徒記入</span></h2>
       <div class="field">
-        <textarea data-f="wishField" style="min-height:100px" placeholder="将来の夢、なりたい職業、興味のある分野、進学/就職を選んだ理由などを自由に書いてください">${esc(s.wishField)}</textarea>
+        <textarea data-f="wishField" style="min-height:100px" placeholder="進学先で学びたいこと、なりたい職業、興味のある分野、将来やってみたいことなどを自由に書いてください">${esc(s.wishField)}</textarea>
       </div>
     </div>
 
     <div class="card stuband">
       <h2>🎯 行きたい学校・受けたい企業 <span class="role-tag s">生徒記入</span></h2>
-      <table class="wish"><thead><tr>
-        <th style="width:48px">志望</th><th style="width:90px">区分</th>
-        <th>学校名 / 企業名</th><th>学部・学科 / 職種</th>
-        <th style="width:140px">受験方式・選考</th><th>備考</th><th style="width:40px"></th>
-      </tr></thead><tbody id="wishBody"></tbody></table>
-      <button class="btn stu mini no-print" id="addWish" style="margin-top:10px">＋ 志望先を追加</button>
+      <div id="wishBody" class="wish-list"></div>
+      <button class="btn stu mini no-print" id="addWish" style="margin-top:6px">＋ 志望先を追加</button>
     </div>
 
     <div class="card stuband">
@@ -397,7 +423,7 @@ function renderStudent(){
           <select data-f="famUniv">${optionsHTML(UNIV_OPTS,s.famUniv)}</select></div>
       </div>
       <div class="field" style="margin-top:12px"><label>進学・通学してよい地域の範囲</label>
-        <input data-f="famArea" value="${esc(s.famArea)}" placeholder="例：関東〜中部まで／本州のみ／自宅から通える範囲 など"></div>
+        <select data-f="famArea">${optionsHTML(AREA_OPTS,s.famArea)}</select></div>
       <div class="field" style="margin-top:12px"><label>その他、家庭で話したこと</label>
         <textarea data-f="famNote" placeholder="学費・奨学金のこと、保護者の希望など、家で話し合ったことを書いてください">${esc(s.famNote)}</textarea></div>
     </div>
@@ -544,18 +570,14 @@ function renderTeacher(){
     </div>
 
     <div class="card stuband">
-      <h2>💭 本人の希望・将来像 <span class="role-tag s">生徒記入</span></h2>
+      <h2>💭 進学先で学びたいことや将来の展望 <span class="role-tag s">生徒記入</span></h2>
       <div class="field"><textarea data-f="wishField" style="min-height:80px">${esc(s.wishField)}</textarea></div>
     </div>
 
     <div class="card stuband">
       <h2>🎯 希望進路（志望先） <span class="role-tag s">生徒記入</span></h2>
-      <table class="wish"><thead><tr>
-        <th style="width:48px">志望</th><th style="width:90px">区分</th>
-        <th>学校名 / 企業名</th><th>学部・学科 / 職種</th>
-        <th style="width:140px">受験方式・選考</th><th>備考</th><th style="width:40px"></th>
-      </tr></thead><tbody id="wishBody"></tbody></table>
-      <button class="btn ghost mini no-print" id="addWish" style="margin-top:10px">＋ 志望先を追加</button>
+      <div id="wishBody" class="wish-list"></div>
+      <button class="btn ghost mini no-print" id="addWish" style="margin-top:6px">＋ 志望先を追加</button>
     </div>
 
     <div class="card stuband">
@@ -575,7 +597,7 @@ function renderTeacher(){
         <div class="field"><label>国公立・私立のしばり</label><select data-f="famUniv">${optionsHTML(UNIV_OPTS,s.famUniv)}</select></div>
       </div>
       <div class="grid g2" style="margin-top:12px">
-        <div class="field"><label>進学・通学してよい地域の範囲</label><input data-f="famArea" value="${esc(s.famArea)}" placeholder="例：関東〜中部／本州のみ など"></div>
+        <div class="field"><label>進学・通学してよい地域の範囲</label><select data-f="famArea">${optionsHTML(AREA_OPTS,s.famArea)}</select></div>
         <div class="field"><label>その他、家庭で話したこと</label><input data-f="famNote" value="${esc(s.famNote)}" placeholder="学費・奨学金・保護者の希望など"></div>
       </div>
     </div>
@@ -642,7 +664,20 @@ function renderMeeting(){
   const main=document.getElementById('main');
   if(!s){ main.innerHTML=emptyHTML('左の一覧から、面談する生徒を選んでください。'); document.getElementById('metaInfo').textContent=`面談モード ・ 生徒 ${state.students.length} 名`; return; }
   const courseLabel=s.course||'未定';
-  const wishRows=s.wishes.map((w,i)=>`<tr><td style="text-align:center;font-weight:700">第${i+1}</td><td>${disp(w.type)}</td><td>${disp(w.name)}</td><td>${disp(w.dept)}</td><td>${disp(w.method)}</td><td>${disp(w.note)}</td></tr>`).join('');
+  const wishCards=s.wishes.map((w,i)=>{
+    const sched=[
+      w.appPeriod?`出願<b>${esc(w.appPeriod)}</b>`:'',
+      w.examDate?`試験<b>${esc(w.examDate)}</b>`:'',
+      w.resultDate?`発表<b>${esc(w.resultDate)}</b>`:'',
+      w.procDeadline?`手続締切<b>${esc(w.procDeadline)}</b>`:''
+    ].filter(Boolean);
+    return `<div class="wish-read">
+      <div class="wr-top"><span class="wr-rank">第${i+1}</span><span class="wr-name">${disp(w.name)}</span>
+        <span class="wr-meta">${[w.type,w.dept,w.method].filter(Boolean).map(esc).join(' / ')}</span></div>
+      ${sched.length?`<div class="wr-sched">${sched.map(x=>'<span>'+x+'</span>').join('')}</div>`:''}
+      ${w.note?`<div class="wr-meta" style="margin-top:4px">備考：${esc(w.note)}</div>`:''}
+    </div>`;
+  }).join('');
   main.innerHTML=`
   <div class="wrap">
     <div class="toolbar no-print">
@@ -663,7 +698,7 @@ function renderMeeting(){
       <div>
         <div class="card stuband">
           <h2>🙋 本人の希望 <span class="role-tag s">生徒</span></h2>
-          <div class="read"><div class="k">希望・将来やりたいこと</div><div class="v">${disp(s.wishField)}</div></div>
+          <div class="read"><div class="k">進学先で学びたいこと・将来の展望</div><div class="v">${disp(s.wishField)}</div></div>
           <div class="read"><div class="k">得意・強み</div><div class="v">${disp(s.subjectsGood)}</div></div>
           <div class="read"><div class="k">苦手・不安</div><div class="v">${disp(s.subjectsWeak)}</div></div>
           <div class="read"><div class="k">相談したいこと</div><div class="v">${disp(s.studentQuestions)}</div></div>
@@ -691,8 +726,7 @@ function renderMeeting(){
 
     <div class="card">
       <h2>🎯 希望進路（志望先）</h2>
-      <table class="read-wish"><thead><tr><th style="width:44px">志望</th><th style="width:80px">区分</th><th>学校名 / 企業名</th><th>学部・学科 / 職種</th><th>受験方式・選考</th><th>備考</th></tr></thead>
-      <tbody>${wishRows}</tbody></table>
+      ${wishCards}
     </div>
 
     ${(s.moshiList&&s.moshiList.length)?`<div class="card"><h2>📈 模試結果</h2>${moshiCardHTML(s)}</div>`:''}
