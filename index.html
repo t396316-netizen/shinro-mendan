@@ -514,6 +514,7 @@ function teacherSidebar(){
   document.getElementById('sideActions').innerHTML=`<button class="btn primary" id="addBtn">＋ 生徒を追加</button>`
     +(ROSTER.length?`<button class="btn ghost" id="seedBtn" title="名簿に登録されている生徒を一覧に追加">📋 名簿から作成</button>`:'');
   document.getElementById('sideFoot').innerHTML=`
+    <button class="btn stu mini" id="importStuCsv" style="flex-basis:100%">📥 生徒回答CSV（Googleフォーム）を取込</button>
     <button class="btn stu mini" id="importCode" style="flex-basis:100%">📋 提出コードを貼り付けて取込</button>
     <button class="btn ghost mini" id="importMoshi" style="flex-basis:100%">📈 模試CSVを取込</button>
     <button class="btn ghost mini" id="importStu">📥 提出ファイルを取込</button>
@@ -522,6 +523,7 @@ function teacherSidebar(){
   document.getElementById('addBtn').onclick=()=>{ const s=newStudent(); state.students.push(s); currentId=s.id; persistState(); render(); };
   const seedBtn=document.getElementById('seedBtn');
   if(seedBtn) seedBtn.onclick=()=>{ const n=seedRoster(); render(); alert(n?`名簿から ${n}名 を追加しました。`:'追加する生徒はありませんでした（すでに全員登録済み）。'); };
+  document.getElementById('importStuCsv').onclick=openStudentCSV;
   document.getElementById('importCode').onclick=openCodeImport;
   document.getElementById('importMoshi').onclick=openMoshiCSV;
   document.getElementById('importStu').onclick=()=>openFile('teacher-import-student');
@@ -937,15 +939,63 @@ function parseMoshiCSV(text){
   }
   return out;
 }
-function openMoshiCSV(){ document.getElementById('csvInput').click(); }
+let csvKind='moshi';
+function openMoshiCSV(){ csvKind='moshi'; document.getElementById('csvInput').click(); }
+function openStudentCSV(){ csvKind='student'; document.getElementById('csvInput').click(); }
 document.getElementById('csvInput').onchange=e=>{
   const f=e.target.files[0]; if(!f) return;
+  const kind=csvKind;
   const r=new FileReader();
-  r.onload=()=>importMoshiCSV(r.result, f.name.replace(/\.csv$/i,''));
+  r.onload=()=>{ if(kind==='student') importStudentCSV(r.result); else importMoshiCSV(r.result, f.name.replace(/\.csv$/i,'')); };
   r.onerror=()=>alert('ファイルを読み込めませんでした。');
-  try{ r.readAsText(f,'shift_jis'); }catch(_){ r.readAsText(f); }
+  // 模試(ベネッセ)はShift-JIS、Googleフォーム回答はUTF-8
+  if(kind==='student'){ r.readAsText(f); }
+  else { try{ r.readAsText(f,'shift_jis'); }catch(_){ r.readAsText(f); } }
   e.target.value='';
 };
+// Googleフォーム回答CSV → 生徒データ（HRNOで照合）
+function importStudentCSV(text){
+  let rows; try{ rows=parseCSV(text).filter(r=>r.length>1 && r.some(c=>c!=='')); }catch(e){ alert('CSVを解析できませんでした。'); return; }
+  if(rows.length<2){ alert('回答データが見つかりませんでした。'); return; }
+  const hdr=rows[0].map(h=>h.trim());
+  const col=(...keys)=>hdr.findIndex(h=>keys.some(k=>h.includes(k)));
+  const map={
+    hrno: col('HRNO','出席番号'), name: col('氏名'),
+    course: col('進路の希望','進路希望'), wishField: col('学びたい','将来の展望'),
+    subjectsGood: col('得意'), subjectsWeak: col('苦手'),
+    studentQuestions: col('相談したい'),
+    famAlone: col('一人暮らし','通学範囲'), famRonin: col('浪人'),
+    famUniv: col('国公立'), famArea: col('地域'), famNote: col('その他')
+  };
+  if(map.hrno<0){ alert('「HRNO（出席番号）」の列が見つかりません。\nGoogleフォームの回答スプレッドシートをCSVで書き出したものを選んでください。'); return; }
+  // 志望校の列（第1志望〜）
+  const wishCols=[]; hdr.forEach((h,i)=>{ if(/第\s*[1-9１-９]\s*志望/.test(h)) wishCols.push(i); });
+  const g=(row,i)=>i>=0?(row[i]||'').trim():'';
+  const normCourse=v=> v.includes('進学')?'進学': v.includes('就職')?'就職':'';
+  let applied=0, created=0, skipped=0;
+  for(let r=1;r<rows.length;r++){ const row=rows[r];
+    const hrno=g(row,map.hrno); if(!/^\d{4}$/.test(hrno)){ skipped++; continue; }
+    const pp=parseHRNO(hrno);
+    let t = pp ? state.students.find(s=>s.rosterId===pp.rosterId) : null;
+    let isNew=false;
+    if(!t){ t=newStudent(); if(pp){ t.cls=pp.cls; t.no=pp.no; t.rosterId=pp.rosterId; } t.hrno=hrno; state.students.push(t); created++; isNew=true; }
+    // 氏名は先生が登録済みなら優先
+    const nm=g(row,map.name); if(nm && !(t.name&&t.name.trim())) t.name=nm;
+    if(map.course>=0){ const c=normCourse(g(row,map.course)); if(c||g(row,map.course)) t.course=c; }
+    ['wishField','subjectsGood','subjectsWeak','studentQuestions','famAlone','famRonin','famUniv','famArea','famNote'].forEach(f=>{
+      if(map[f]>=0){ const v=g(row,map[f]); if(v) t[f]=v; }
+    });
+    // 志望校（テキスト → wishes[].name）
+    if(wishCols.length){
+      const ws=wishCols.map(i=>g(row,i)).filter(v=>v!=='');
+      if(ws.length) t.wishes=ws.map(v=>Object.assign(blankWish(),{name:v}));
+    }
+    t.submittedAt=new Date().toISOString();
+    applied++;
+  }
+  persistState(); render();
+  alert(`生徒の回答を ${applied}名 取り込みました${created?`（うち新規${created}名）`:''}${skipped?`／HRNO不正で${skipped}件スキップ`:''}。`);
+}
 function importMoshiCSV(text, defaultName){
   let parsed=[]; try{ parsed=parseMoshiCSV(text); }catch(err){ alert('CSVを解析できませんでした。'); return; }
   if(!parsed.length){ alert('模試データが見つかりませんでした。\nHRNO列・氏名列のあるベネッセ模試CSVか確認してください。'); return; }
