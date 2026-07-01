@@ -961,6 +961,18 @@ function importStudentCSV(text){
   if(rows.length<2){ alert('回答データが見つかりませんでした。'); return; }
   const hdr=rows[0].map(h=>h.trim());
   const col=(...keys)=>hdr.findIndex(h=>keys.some(k=>h.includes(k)));
+  const tsCol=col('タイムスタンプ');
+  // 同じHRNOの再送信（複数回答）は、タイムスタンプが一番新しい行だけを残す
+  if(tsCol>=0){
+    const latest={};
+    for(let r=1;r<rows.length;r++){
+      const hrnoIdx=col('HRNO','出席番号'); const hv=(rows[r][hrnoIdx]||'').trim();
+      if(!hv) continue;
+      const t=Date.parse(rows[r][tsCol]) || 0;
+      if(!latest[hv] || t>=latest[hv].t) latest[hv]={row:rows[r], t};
+    }
+    rows=[rows[0], ...Object.values(latest).map(v=>v.row)];
+  }
   const map={
     hrno: col('HRNO','出席番号'), name: col('氏名'),
     course: col('進路の希望','進路希望'), wishField: col('学びたい','将来の展望'),
