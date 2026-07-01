@@ -274,6 +274,8 @@ function studentFromRoster(r){
 function blankWish(){ return {type:'',name:'',dept:'',method:'',note:'',appStart:'',appEnd:'',examDate:'',resultDate:'',procDeadline:'',appPeriod:''}; }
 // YYYY-MM-DD → M/D（カレンダー以外の旧テキストはそのまま返す）
 function fmtMD(d){ if(!d) return ''; const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(d); return m?(+m[2])+'/'+(+m[3]):d; }
+// 「2026/1/22」「2026-01-22」等 → 「2026-01-22」（date入力用に正規化）
+function normDate(v){ v=(v||'').trim(); if(!v) return ''; const m=/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/.exec(v); return m?`${m[1]}-${('0'+m[2]).slice(-2)}-${('0'+m[3]).slice(-2)}`:v; }
 function blankLog(){ return {date:new Date().toISOString().slice(0,10),text:'',agree:''}; }
 
 /* ============ shared field builders ============ */
@@ -968,8 +970,27 @@ function importStudentCSV(text){
     famUniv: col('国公立'), famArea: col('地域'), famNote: col('その他')
   };
   if(map.hrno<0){ alert('「HRNO（出席番号）」の列が見つかりません。\nGoogleフォームの回答スプレッドシートをCSVで書き出したものを選んでください。'); return; }
-  // 志望校の列（第1志望〜）
-  const wishCols=[]; hdr.forEach((h,i)=>{ if(/第\s*[1-9１-９]\s*志望/.test(h)) wishCols.push(i); });
+  // 志望校の列を「第N志望：項目」で集約（区分・受験方式・各日付に対応）
+  const zen2han=s=>s.replace(/[０-９]/g,d=>'０１２３４５６７８９'.indexOf(d));
+  const wishByRank={};
+  hdr.forEach((h,i)=>{
+    const m=/第\s*([0-9０-９]+)\s*志望/.exec(h); if(!m) return;
+    const rank=parseInt(zen2han(m[1]),10); if(!rank) return;
+    let f;
+    if(h.includes('区分')) f='type';
+    else if(h.includes('受験方式')||h.includes('方式')) f='method';
+    else if(h.includes('出願開始')) f='appStart';
+    else if(h.includes('出願締切')||h.includes('出願締め切り')) f='appEnd';
+    else if(h.includes('試験')) f='examDate';
+    else if(h.includes('発表')) f='resultDate';
+    else if(h.includes('手続')) f='procDeadline';
+    else if(h.includes('備考')) f='note';
+    else if(h.includes('学科')&&!h.includes('学校')) f='dept';
+    else f='name'; // 学校名・学部学科 など
+    (wishByRank[rank]=wishByRank[rank]||{})[f]=i;
+  });
+  const wishRanks=Object.keys(wishByRank).map(Number).sort((a,b)=>a-b);
+  const DATEF=['appStart','appEnd','examDate','resultDate','procDeadline'];
   const g=(row,i)=>i>=0?(row[i]||'').trim():'';
   const normCourse=v=> v.includes('進学')?'進学': v.includes('就職')?'就職':'';
   let applied=0, created=0, skipped=0;
@@ -985,10 +1006,20 @@ function importStudentCSV(text){
     ['wishField','subjectsGood','subjectsWeak','studentQuestions','famAlone','famRonin','famUniv','famArea','famNote'].forEach(f=>{
       if(map[f]>=0){ const v=g(row,map[f]); if(v) t[f]=v; }
     });
-    // 志望校（テキスト → wishes[].name）
-    if(wishCols.length){
-      const ws=wishCols.map(i=>g(row,i)).filter(v=>v!=='');
-      if(ws.length) t.wishes=ws.map(v=>Object.assign(blankWish(),{name:v}));
+    // 志望校（構造化：区分・学校名・学部学科・受験方式・各日付）
+    if(wishRanks.length){
+      const ws=[];
+      wishRanks.forEach(rk=>{
+        const cols=wishByRank[rk]; const w=blankWish(); let any=false;
+        ['type','name','dept','method','appStart','appEnd','examDate','resultDate','procDeadline','note'].forEach(f=>{
+          if(cols[f]===undefined) return;
+          let v=g(row,cols[f]); if(!v) return;
+          if(DATEF.includes(f)) v=normDate(v);
+          w[f]=v; any=true;
+        });
+        if(any) ws.push(w);
+      });
+      if(ws.length) t.wishes=ws;
     }
     t.submittedAt=new Date().toISOString();
     applied++;
