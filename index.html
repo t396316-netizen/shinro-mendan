@@ -41,8 +41,11 @@
   .btn.danger{background:#fbeae9;color:var(--danger)}
   .btn.danger:hover{background:#f6d4d2}
   .btn.lg{padding:12px 20px;font-size:15px}
-  .side-actions{padding:10px 12px;display:flex;gap:8px;border-bottom:1px solid var(--line)}
+  .side-actions{padding:10px 12px;display:flex;gap:8px;border-bottom:1px solid var(--line);flex-wrap:wrap}
   .side-actions .btn{flex:1}
+  .chips{display:flex;gap:6px;flex-basis:100%}
+  .chip{flex:1;border:1px solid var(--line);background:#fff;border-radius:99px;padding:4px 8px;font-size:12px;cursor:pointer;color:var(--sub);font-family:inherit}
+  .chip.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
   .student-list{overflow-y:auto;flex:1}
   .list-empty{padding:18px 14px;color:var(--sub);font-size:13px;text-align:center}
   .stu{padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;flex-direction:column;gap:2px}
@@ -249,6 +252,7 @@ let self_=loadSelf();
 let mode='teacher';
 let currentId=null;
 let saveTimer=null;
+let listFilter='all'; // 一覧の絞り込み（all / nosub=未提出 / sub=提出済）
 
 function loadState(){ try{const d=JSON.parse(localStorage.getItem(STORE_KEY));if(d&&d.students)return d;}catch(e){} return {students:[]}; }
 function loadSelf(){ try{const d=JSON.parse(localStorage.getItem(SELF_KEY));if(d&&d.name!==undefined)return d;}catch(e){} return newStudent(); }
@@ -514,7 +518,18 @@ function submitSelf(){
 function teacherSidebar(){
   document.getElementById('sidebar').classList.remove('hidden');
   document.getElementById('sideActions').innerHTML=`<button class="btn primary" id="addBtn">＋ 生徒を追加</button>`
-    +(ROSTER.length?`<button class="btn ghost" id="seedBtn" title="名簿に登録されている生徒を一覧に追加">📋 名簿から作成</button>`:'');
+    +(ROSTER.length?`<button class="btn ghost" id="seedBtn" title="名簿に登録されている生徒を一覧に追加">📋 名簿から作成</button>`:'')
+    +`<div class="chips" id="listChips">
+        <button class="chip" data-flt="all">全員</button>
+        <button class="chip" data-flt="nosub">未提出</button>
+        <button class="chip" data-flt="sub">提出済</button>
+      </div>`;
+  document.querySelectorAll('#listChips .chip').forEach(c=>{
+    c.classList.toggle('active', c.dataset.flt===listFilter);
+    c.onclick=()=>{ listFilter=c.dataset.flt;
+      document.querySelectorAll('#listChips .chip').forEach(x=>x.classList.toggle('active',x.dataset.flt===listFilter));
+      renderList(); };
+  });
   document.getElementById('sideFoot').innerHTML=`
     <button class="btn stu mini" id="importStuCsv" style="flex-basis:100%">📥 生徒回答CSV（Googleフォーム）を取込</button>
     <button class="btn stu mini" id="importCode" style="flex-basis:100%">📋 提出コードを貼り付けて取込</button>
@@ -551,7 +566,7 @@ function renderTeacher(){
   teacherSidebar(); renderList();
   const s=current();
   const main=document.getElementById('main');
-  if(!s){ main.innerHTML=emptyHTML('左の「＋ 生徒を追加」から始めるか、<br>「📥 生徒の提出を取込」で生徒が書き出したファイルを読み込んでください。'); document.getElementById('metaInfo').textContent=`教員入力モード ・ 生徒 ${state.students.length} 名`; return; }
+  if(!s){ main.innerHTML=emptyHTML('左の「＋ 生徒を追加」から始めるか、<br>「📥 生徒の提出を取込」で生徒が書き出したファイルを読み込んでください。'); document.getElementById('metaInfo').textContent=`教員入力モード ・ 生徒 ${state.students.length} 名 ・ 提出済 ${state.students.filter(x=>x.submittedAt).length} 名`; return; }
   main.innerHTML=`
   <div class="wrap">
     <div class="toolbar no-print">
@@ -653,7 +668,7 @@ function renderTeacher(){
   document.getElementById('addLog').onclick=()=>{ s.logs.unshift(blankLog()); persistState(); redrawLog=bindLogsEditable(s,'logBody',persistState); };
   document.getElementById('delStudent').onclick=()=>{ if(confirm(`「${s.name||'この生徒'}」の資料を削除します。よろしいですか？`)){ state.students=state.students.filter(x=>x.id!==s.id); currentId=null; persistState(); render(); } };
   bindMoshiDelete(s);
-  document.getElementById('metaInfo').textContent=`教員入力モード ・ 生徒 ${state.students.length} 名`;
+  document.getElementById('metaInfo').textContent=`教員入力モード ・ 生徒 ${state.students.length} 名 ・ 提出済 ${state.students.filter(x=>x.submittedAt).length} 名`;
 }
 function bindMoshiDelete(s){
   document.querySelectorAll('#moshiBox [data-delmoshi]').forEach(b=>b.onclick=()=>{
@@ -758,7 +773,12 @@ function renderList(){
   const q=(document.getElementById('search').value||'').trim().toLowerCase();
   const list=document.getElementById('studentList');
   list.innerHTML='';
-  const filtered=state.students.filter(s=>!q||(s.name+s.kana+s.no+s.cls).toLowerCase().includes(q));
+  let filtered=state.students.filter(s=>!q||(s.name+s.kana+s.no+s.cls).toLowerCase().includes(q));
+  // 提出状況の絞り込み（教員モードのみ）
+  if(mode==='teacher'){
+    if(listFilter==='nosub') filtered=filtered.filter(s=>!s.submittedAt);
+    else if(listFilter==='sub') filtered=filtered.filter(s=>!!s.submittedAt);
+  }
   // 出席番号順に表示（番号なしは末尾）
   const numOf=s=>{ const n=parseInt(s.no,10); return isNaN(n)?Infinity:n; };
   filtered.sort((a,b)=>numOf(a)-numOf(b));
@@ -957,8 +977,12 @@ document.getElementById('csvInput').onchange=e=>{
 };
 // Googleフォーム回答CSV → 生徒データ（HRNOで照合）
 function importStudentCSV(text){
+  if(text.charCodeAt(0)===0xFEFF) text=text.slice(1); // BOM除去
   let rows; try{ rows=parseCSV(text).filter(r=>r.length>1 && r.some(c=>c!=='')); }catch(e){ alert('CSVを解析できませんでした。'); return; }
-  if(rows.length<2){ alert('回答データが見つかりませんでした。'); return; }
+  if(rows.length<2){
+    alert('CSVに回答の行がありませんでした（見出しのみ、または空のファイルです）。\n\n・スプレッドシートの「回答」シートに、生徒の送信した行が入っているか\n・送信が成功しているか（送信後に✅画面が出たか）\nを確認してから、もう一度CSVを書き出してください。');
+    return;
+  }
   const hdr=rows[0].map(h=>h.trim());
   const col=(...keys)=>hdr.findIndex(h=>keys.some(k=>h.includes(k)));
   const tsCol=col('タイムスタンプ');
@@ -1005,7 +1029,7 @@ function importStudentCSV(text){
   const DATEF=['appStart','appEnd','examDate','resultDate','procDeadline'];
   const g=(row,i)=>i>=0?(row[i]||'').trim():'';
   const normCourse=v=> v.includes('進学')?'進学': v.includes('就職')?'就職':'';
-  let applied=0, created=0, skipped=0;
+  let applied=0, created=0, skipped=0; const importedNames=[];
   for(let r=1;r<rows.length;r++){ const row=rows[r];
     const hrno=g(row,map.hrno); if(!/^\d{4}$/.test(hrno)){ skipped++; continue; }
     const pp=parseHRNO(hrno);
@@ -1034,10 +1058,11 @@ function importStudentCSV(text){
       if(ws.length) t.wishes=ws;
     }
     t.submittedAt=new Date().toISOString();
+    importedNames.push((t.no?t.no+'番 ':'')+(t.name||hrno));
     applied++;
   }
   persistState(); render();
-  alert(`生徒の回答を ${applied}名 取り込みました${created?`（うち新規${created}名）`:''}${skipped?`／HRNO不正で${skipped}件スキップ`:''}。`);
+  alert(`生徒の回答を ${applied}名 取り込みました${created?`（うち新規${created}名）`:''}${skipped?`／HRNO不正で${skipped}件スキップ`:''}。\n`+importedNames.map(n=>'・'+n).join('\n'));
 }
 function importMoshiCSV(text, defaultName){
   let parsed=[]; try{ parsed=parseMoshiCSV(text); }catch(err){ alert('CSVを解析できませんでした。'); return; }
