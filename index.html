@@ -23,7 +23,7 @@
   .tab:hover{color:#fff}
   .tab.active{color:#fff;border-bottom-color:#fff}
   header.app .meta{font-size:12px;opacity:.85;margin-left:auto;white-space:nowrap}
-  .layout{display:flex;min-height:calc(100vh - 52px)}
+  .layout{display:flex;height:calc(100vh - 52px)}
   /* sidebar */
   .sidebar{width:280px;background:var(--panel);border-right:1px solid var(--line);
     display:flex;flex-direction:column;flex-shrink:0}
@@ -178,8 +178,8 @@
   /* print */
   @media print{
     header.app,.sidebar,.toolbar,.no-print{display:none !important}
-    .layout{display:block}
-    .main{padding:0;overflow:visible}
+    .layout{display:block;height:auto}
+    .main{padding:0;overflow:visible;height:auto}
     .wrap{max-width:none}
     body{background:#fff;font-size:12px}
     .card,.mtg-head{box-shadow:none;border:1px solid #bbb;page-break-inside:avoid;margin-bottom:10px}
