@@ -665,7 +665,7 @@ function renderTeacher(){
   let redrawWish=bindWishEditable(s,'wishBody',()=>{persistState();renderList();});
   let redrawLog=bindLogsEditable(s,'logBody',persistState);
   document.getElementById('addWish').onclick=()=>{ s.wishes.push(blankWish()); persistState(); redrawWish=bindWishEditable(s,'wishBody',()=>{persistState();renderList();}); };
-  document.getElementById('addLog').onclick=()=>{ s.logs.unshift(blankLog()); persistState(); redrawLog=bindLogsEditable(s,'logBody',persistState); };
+  document.getElementById('addLog').onclick=()=>{ s.logs.push(blankLog()); persistState(); redrawLog=bindLogsEditable(s,'logBody',persistState); };
   document.getElementById('delStudent').onclick=()=>{ if(confirm(`「${s.name||'この生徒'}」の資料を削除します。よろしいですか？`)){ state.students=state.students.filter(x=>x.id!==s.id); currentId=null; persistState(); render(); } };
   bindMoshiDelete(s);
   document.getElementById('metaInfo').textContent=`教員入力モード ・ 生徒 ${state.students.length} 名 ・ 提出済 ${state.students.filter(x=>x.submittedAt).length} 名`;
@@ -763,7 +763,7 @@ function renderMeeting(){
     </div>
   </div>`;
   let redrawLog=bindLogsEditable(s,'logBody',persistState);
-  document.getElementById('addLog').onclick=()=>{ s.logs.unshift(blankLog()); persistState(); redrawLog=bindLogsEditable(s,'logBody',persistState); };
+  document.getElementById('addLog').onclick=()=>{ s.logs.push(blankLog()); persistState(); redrawLog=bindLogsEditable(s,'logBody',persistState); };
   document.getElementById('metaInfo').textContent=`面談モード ・ 生徒 ${state.students.length} 名`;
 }
 
